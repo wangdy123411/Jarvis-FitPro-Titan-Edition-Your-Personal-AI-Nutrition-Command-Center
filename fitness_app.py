@@ -9,7 +9,8 @@ from PIL import Image
 import io
 import time
 import random
-
+import os
+db_path = "jarvis_pro_v2.db"
 # ================= ⚡ 配置区域 =================
 API_KEY = "sk-cedf4c8f0d1042138740dbce8fbd0a30" # 替换你的 Key
 BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -18,6 +19,18 @@ TEXT_MODEL = "qwen-plus"
 DB_FILE = "jarvis_pro_v2.db"
 
 client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
+# === 📥 紧急数据导出工具 ===
+
+if os.path.exists(db_path):
+    with open(db_path, "rb") as f:
+        st.download_button(
+            label="📥 点击下载我的数据库备份 (Save Data)",
+            data=f,
+            file_name="jarvis_backup.db",
+            mime="application/octet-stream"
+        )
+else:
+    st.warning("⚠️ 暂无数据库文件 (No Database Found)")
 
 # ================= 🖼️ 激励素材 =================
 HERO_IMAGES = [
