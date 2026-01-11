@@ -3,7 +3,7 @@ import pytz
 from datetime import datetime
 
 # === 基础配置 ===
-API_KEY = "sk-cedf4c8f0d1042138740dbce8fbd0a30"  # 建议后续改为 st.secrets
+API_KEY = st.secrets["DASHSCOPE_API_KEY"]  # 建议后续改为 st.secrets
 BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 # === 核心模型 ===
@@ -24,4 +24,5 @@ def get_current_time():
 
 def get_current_datetime_obj():
     """获取当前时区的 datetime 对象"""
+
     return datetime.now(TZ_CN)
