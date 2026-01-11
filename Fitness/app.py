@@ -79,11 +79,20 @@ def main_app():
     current_username = st.session_state['user_info'][1]
 
     # --- 侧边栏 ---
+  # 在 main_app 函数的侧边栏 (with st.sidebar:)
     with st.sidebar:
         st.header(f"👤 {current_username.upper()}")
+        
+        # 🔴 修改后的 Logout 逻辑
         if st.button("🔒 LOGOUT"):
+            # 1. 清空 URL 参数（这一步最关键！撕掉免死金牌）
+            st.query_params.clear()
+            
+            # 2. 清空登录状态
             st.session_state['logged_in'] = False
             st.session_state['user_info'] = None
+            
+            # 3. 强制刷新页面
             st.rerun()
             
         st.divider()
@@ -369,5 +378,6 @@ if st.session_state['logged_in']:
     main_app()
 else:
     login_page()
+
 
 
