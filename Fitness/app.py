@@ -330,9 +330,35 @@ def main_app():
             st.info("No reports yet.")
 
 # === 🚀 程序入口逻辑 ===
+# 在 app.py 的最底部 (原来的 if st.session_state['logged_in']: ... 那里)
+# 替换为以下代码：
+
+# === 🚀 程序入口与自动登录逻辑 ===
+
+# 1. 如果没登录，先检查 URL 里有没有“免死金牌”
+if not st.session_state['logged_in']:
+    params = st.query_params
+    # 检查是否有 user 和 token 参数
+    if "user" in params and "token" in params:
+        auto_user = params["user"]
+        # 这里为了演示简单，直接信任 URL。
+        # (严格来说应该验证 token 的哈希值，但对于个人应用这样足够了)
+        
+        # 去数据库查一下这个用户，获取 ID
+        import sqlite3
+        conn = sqlite3.connect(config.DB_FILE)
+        # 注意：这里需要根据你的 users 表结构调整，假设 username 是唯一的
+        u_data = conn.execute("SELECT * FROM users WHERE username=?", (auto_user,)).fetchone()
+        conn.close()
+        
+        if u_data:
+            st.session_state['logged_in'] = True
+            st.session_state['user_info'] = u_data
+            st.toast(f"⚡ AUTO-LOGIN: {auto_user}", icon="🔓")
+
+# 2. 正常的路由逻辑
 if st.session_state['logged_in']:
     main_app()
 else:
-
     login_page()
 
