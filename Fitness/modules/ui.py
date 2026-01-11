@@ -71,45 +71,48 @@ def inject_css():
     """, unsafe_allow_html=True)
 
 def render_meal_card(row):
-    """
-    渲染卡片 (终极修复版：使用 textwrap.dedent 清除缩进)
-    """
-    # 这里的 HTML 代码虽然在 Python 里缩进了，
-    # 但 textwrap.dedent 会自动把它“顶格”处理，解决 Streamlit 的渲染 bug
-    html_content = textwrap.dedent(f"""
+    # 将所有变量先取出来，防止在 f-string 里写逻辑出错
+    food = row['food_name']
+    time = row['time']
+    cal = int(row['calories'])
+    pro = row['protein']
+    carbs = row['carbs']
+    fat = row['fat']
+    advice = row['advice']
+
+    # 🟢 核心修改：使用一行流写法，或者确保没有任何换行缩进
+    # 这里我们用最稳妥的方式：直接写成一行长的 HTML，虽然代码不好看，但绝对不会渲染错
+    html = f"""
     <div class="titan-card">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:15px;">
             <div>
-                <h3 class="food-title">{row['food_name']}</h3>
-                <div style="font-family:'Montserrat'; font-size:11px; color:#666; letter-spacing:1px; margin-top:4px;">SCAN TIME: {row['time']}</div>
+                <h3 class="food-title">{food}</h3>
+                <div style="font-family:'Montserrat'; font-size:11px; color:#666; letter-spacing:1px; margin-top:4px;">SCAN TIME: {time}</div>
             </div>
             <div style="text-align:right;">
-                <div class="cal-val">{int(row['calories'])}</div>
+                <div class="cal-val">{cal}</div>
                 <div style="font-size:10px; color:#888; font-weight:700; letter-spacing:2px; margin-top:-5px;">KCAL</div>
             </div>
         </div>
-        
         <div style="display:flex; justify-content:space-around; align-items:center; padding: 5px 0;">
             <div style="text-align:center;">
-                <div style="font-family:'Oswald'; font-size:22px; color:#FF5722; font-weight:600;">{row['protein']}</div>
+                <div style="font-family:'Oswald'; font-size:22px; color:#FF5722; font-weight:600;">{pro}</div>
                 <div style="font-size:9px; color:#555; font-weight:700; letter-spacing:1px;">PROTEIN</div>
             </div>
             <div style="width:1px; height:20px; background:rgba(255,255,255,0.1);"></div>
             <div style="text-align:center;">
-                <div style="font-family:'Oswald'; font-size:22px; color:#e0e0e0; font-weight:600;">{row['carbs']}</div>
+                <div style="font-family:'Oswald'; font-size:22px; color:#e0e0e0; font-weight:600;">{carbs}</div>
                 <div style="font-size:9px; color:#555; font-weight:700; letter-spacing:1px;">CARBS</div>
             </div>
             <div style="width:1px; height:20px; background:rgba(255,255,255,0.1);"></div>
             <div style="text-align:center;">
-                <div style="font-family:'Oswald'; font-size:22px; color:#e0e0e0; font-weight:600;">{row['fat']}</div>
+                <div style="font-family:'Oswald'; font-size:22px; color:#e0e0e0; font-weight:600;">{fat}</div>
                 <div style="font-size:9px; color:#555; font-weight:700; letter-spacing:1px;">FAT</div>
             </div>
         </div>
-        
-        <div style="margin-top:20px; font-size:13px; color:#aaa; font-style:italic; line-height:1.6;">
-            "{row['advice']}"
-        </div>
+        <div style="margin-top:20px; font-size:13px; color:#aaa; font-style:italic; line-height:1.6;">"{advice}"</div>
     </div>
-    """)
+    """
     
-    st.markdown(html_content, unsafe_allow_html=True)
+    st.markdown(html, unsafe_allow_html=True)
+
