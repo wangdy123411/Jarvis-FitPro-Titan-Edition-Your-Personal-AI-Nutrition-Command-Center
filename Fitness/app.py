@@ -160,6 +160,103 @@ def main_app():
                             st.error(f"Error: {e}")
 
         st.divider()
+        st.divider()
+    st.markdown("### 🧬 万能数据注入 (Universal Restore)")
+    
+    # 允许上传任意 .db 文件
+    uploaded_file = st.file_uploader("拖入你的数据库文件 (v2pro.db 或 old.db)", type=["db"])
+    
+    if uploaded_file and st.button("🚀 强制注入给 John"):
+        import sqlite3
+        import hashlib
+        
+        # 1. 保存上传的文件到临时区
+        temp_path = "temp_restore.db"
+        with open(temp_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+            
+        st.caption("正在分析文件结构...")
+        
+        try:
+            # === A. 准备目标环境 (云端现有的库) ===
+            conn_dest = sqlite3.connect(config.DB_FILE)
+            c_dest = conn_dest.cursor()
+            
+            # 确保 John 存在
+            c_dest.execute("SELECT id FROM users WHERE username='John'")
+            john = c_dest.fetchone()
+            if not john:
+                # 如果没有 John，创建一个，密码 200487
+                pw_hash = hashlib.sha256(str.encode("200487")).hexdigest()
+                date_now = config.get_current_time()[0]
+                c_dest.execute("INSERT INTO users (username, password, created_at) VALUES (?, ?, ?)", 
+                              ("John", pw_hash, date_now))
+                target_user_id = c_dest.lastrowid
+                st.success(f"已自动创建账户 John (ID: {target_user_id})")
+            else:
+                target_user_id = john[0]
+                st.info(f"数据将注入到账户 John (ID: {target_user_id})")
+
+            # === B. 分析上传的文件 (来源库) ===
+            conn_src = sqlite3.connect(temp_path)
+            c_src = conn_src.cursor()
+            
+            # 🕵️‍♂️ 侦探逻辑：看看上传的文件里，meals 表到底长什么样？
+            # 获取 meals 表的所有列名
+            cursor = c_src.execute("SELECT * FROM meals LIMIT 1")
+            columns = [description[0] for description in cursor.description]
+            st.write(f"🔍 检测到上传文件的列: {columns}")
+            
+            # 判断是不是新版数据 (有没有 user_id)
+            is_v3_format = 'user_id' in columns
+            
+            # === C. 开始搬运饮食数据 (Meals) ===
+            if is_v3_format:
+                # 这种情况：你上传的是 v2pro.db (已经带 user_id 了)
+                st.info("识别为新版格式 (V3)，正在合并...")
+                # 我们只取数据列，忽略它原来的 user_id，强制改成当前的 John
+                data = c_src.execute("SELECT date, time, food_name, calories, protein, carbs, fat, advice FROM meals").fetchall()
+            else:
+                # 这种情况：你上传的是 old.db (旧版)
+                st.info("识别为旧版格式 (V2)，正在升级...")
+                data = c_src.execute("SELECT date, time, food_name, calories, protein, carbs, fat, advice FROM meals").fetchall()
+            
+            count_m = 0
+            for row in data:
+                # 写入云端库，强制 user_id = John
+                c_dest.execute("INSERT INTO meals (user_id, date, time, food_name, calories, protein, carbs, fat, advice) VALUES (?,?,?,?,?,?,?,?,?)",
+                              (target_user_id, row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]))
+                count_m += 1
+            
+            # === D. 开始搬运身体数据 (Body Stats) ===
+            # 同样的侦探逻辑检测 body_stats
+            cursor_b = c_src.execute("SELECT * FROM body_stats LIMIT 1")
+            cols_b = [desc[0] for desc in cursor_b.description]
+            
+            if 'user_id' in cols_b:
+                data_b = c_src.execute("SELECT date, weight, body_fat, muscle, water_rate, bmr, visceral_fat FROM body_stats").fetchall()
+            else:
+                data_b = c_src.execute("SELECT date, weight, body_fat, muscle, water_rate, bmr, visceral_fat FROM body_stats").fetchall()
+                
+            count_s = 0
+            for row in data_b:
+                # 查重，避免重复插入同一天的体重
+                exists = c_dest.execute("SELECT id FROM body_stats WHERE user_id=? AND date=?", (target_user_id, row[0])).fetchone()
+                if not exists:
+                    c_dest.execute("INSERT INTO body_stats (user_id, date, weight, body_fat, muscle, water_rate, bmr, visceral_fat) VALUES (?,?,?,?,?,?,?,?)",
+                                  (target_user_id, row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
+                    count_s += 1
+            
+            conn_dest.commit()
+            conn_src.close()
+            conn_dest.close()
+            
+            st.balloons()
+            st.success(f"🎉 成功！注入了 {count_m} 条饮食记录，{count_s} 条身体数据！")
+            st.markdown("### 👉 请立即刷新网页并查看！")
+            
+        except Exception as e:
+            st.error(f"❌ 注入失败 (详情): {e}")
         # ⚠️ 传入 current_user_id
         meals = database.get_today_meals(current_user_id)
         if not meals.empty:
@@ -238,3 +335,4 @@ if st.session_state['logged_in']:
 else:
 
     login_page()
+
