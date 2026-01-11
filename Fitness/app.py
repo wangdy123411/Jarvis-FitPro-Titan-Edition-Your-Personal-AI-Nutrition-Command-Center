@@ -81,6 +81,45 @@ def main_app():
     # --- 侧边栏 ---
   # 在 main_app 函数的侧边栏 (with st.sidebar:)
     with st.sidebar:
+        st.divider()
+    st.markdown("### 🧹 数据库清洁工 (Cleaner)")
+    
+    if st.button("♻️ 执行去重 (Remove Duplicates)"):
+        import sqlite3
+        conn = sqlite3.connect(config.DB_FILE)
+        c = conn.cursor()
+        
+        # 1. 清理饮食记录 (Meals)
+        # 逻辑：如果 用户、日期、时间、食物名、卡路里 都一样，只保留 ID 最小的那条
+        c.execute("""
+            DELETE FROM meals 
+            WHERE id NOT IN (
+                SELECT MIN(id) 
+                FROM meals 
+                GROUP BY user_id, date, time, food_name, calories
+            )
+        """)
+        deleted_meals = c.rowcount
+        
+        # 2. 清理身体数据 (Body Stats)
+        # 逻辑：同一天如果有多条记录，只保留最早录入的那条
+        c.execute("""
+            DELETE FROM body_stats 
+            WHERE id NOT IN (
+                SELECT MIN(id) 
+                FROM body_stats 
+                GROUP BY user_id, date
+            )
+        """)
+        deleted_stats = c.rowcount
+        
+        conn.commit()
+        conn.close()
+        
+        st.success(f"🧹 清理完成！删除了 {deleted_meals} 条重复饮食记录，{deleted_stats} 条重复身体数据。")
+        time.sleep(2)
+        st.rerun()
+        
         st.header(f"👤 {current_username.upper()}")
         
         # 🔴 修改后的 Logout 逻辑
@@ -378,6 +417,7 @@ if st.session_state['logged_in']:
     main_app()
 else:
     login_page()
+
 
 
 
