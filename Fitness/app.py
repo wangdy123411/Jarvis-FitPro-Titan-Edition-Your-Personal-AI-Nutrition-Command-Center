@@ -36,16 +36,24 @@ def login_page():
         with st.form("login_form"):
             username = st.text_input("CODENAME (Username)")
             password = st.text_input("ACCESS KEY (Password)", type="password")
+            
             if st.form_submit_button("🚀 AUTHENTICATE", type="primary"):
                 user = auth.login_user(username, password)
                 if user:
+                    # 🟢 新增：登录成功后，设置 Session 和 URL 参数
                     st.session_state['logged_in'] = True
-                    st.session_state['user_info'] = user # user[0] is id, user[1] is username
+                    st.session_state['user_info'] = user
+                    
+                    # 这是一个 Streamlit 的原生功能，可以在 URL 里存参数
+                    # 这样刷新页面后，我们可以读回来
+                    st.query_params["user"] = user[1]  # 存用户名
+                    st.query_params["token"] = "valid" # 简单验证（可做更复杂的加密）
+                    
                     st.success(f"WELCOME BACK, COMMANDER {user[1].upper()}.")
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.error("ACCESS DENIED: Invalid Codename or Key.")
+                    st.error("ACCESS DENIED.")
 
     with tab_signup:
         with st.form("signup_form"):
@@ -361,4 +369,5 @@ if st.session_state['logged_in']:
     main_app()
 else:
     login_page()
+
 
