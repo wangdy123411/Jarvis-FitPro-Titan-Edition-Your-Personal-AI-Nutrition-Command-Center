@@ -1,7 +1,7 @@
 import os
 import pytz
 from datetime import datetime
-
+import streamlit as st
 # === 基础配置 ===
 API_KEY = st.secrets["DASHSCOPE_API_KEY"]  # 建议后续改为 st.secrets
 BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
@@ -26,3 +26,4 @@ def get_current_datetime_obj():
     """获取当前时区的 datetime 对象"""
 
     return datetime.now(TZ_CN)
+
