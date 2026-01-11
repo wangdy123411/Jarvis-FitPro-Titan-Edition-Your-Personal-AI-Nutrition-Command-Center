@@ -5,8 +5,13 @@ import os
 import base64
 import textwrap
 
-# 引入新模块 auth
-from modules import config, database, ai_engine, ui, automation, auth
+# 🟢 安全导入：避免 KeyError 循环引用
+import modules.config as config
+import modules.database as database
+import modules.ai_engine as ai_engine
+import modules.ui as ui
+import modules.automation as automation
+import modules.auth as auth
 
 # === 初始化 ===
 st.set_page_config(page_title="Jarvis Titan", page_icon="🦍", layout="centered")
@@ -20,7 +25,7 @@ if 'logged_in' not in st.session_state:
 if 'user_info' not in st.session_state:
     st.session_state['user_info'] = None
 
-# === 🚪 登录/注册界面 (The Gateway) ===
+# === 🚪 登录/注册界面 ===
 def login_page():
     st.markdown("""
     <div style="text-align: center; margin-top: 50px; margin-bottom: 30px;">
@@ -29,7 +34,6 @@ def login_page():
     </div>
     """, unsafe_allow_html=True)
     
-    # 使用 Tabs 分离登录和注册
     tab_login, tab_signup = st.tabs(["🔓 LOGIN", "📝 JOIN PROTOCOL"])
     
     with tab_login:
@@ -40,14 +44,11 @@ def login_page():
             if st.form_submit_button("🚀 AUTHENTICATE", type="primary"):
                 user = auth.login_user(username, password)
                 if user:
-                    # 🟢 新增：登录成功后，设置 Session 和 URL 参数
+                    # 🟢 登录成功：设置 Session 和 URL 参数 (免死金牌)
                     st.session_state['logged_in'] = True
                     st.session_state['user_info'] = user
-                    
-                    # 这是一个 Streamlit 的原生功能，可以在 URL 里存参数
-                    # 这样刷新页面后，我们可以读回来
-                    st.query_params["user"] = user[1]  # 存用户名
-                    st.query_params["token"] = "valid" # 简单验证（可做更复杂的加密）
+                    st.query_params["user"] = user[1]
+                    st.query_params["token"] = "valid"
                     
                     st.success(f"WELCOME BACK, COMMANDER {user[1].upper()}.")
                     time.sleep(1)
@@ -72,125 +73,126 @@ def login_page():
                     else:
                         st.error(f"FAILURE: {msg}")
 
-# === 🏠 主程序 (The Core) ===
+# === 🏠 主程序 ===
 def main_app():
-    # 获取当前用户ID
     current_user_id = st.session_state['user_info'][0]
     current_username = st.session_state['user_info'][1]
 
     # --- 侧边栏 ---
-  # 在 main_app 函数的侧边栏 (with st.sidebar:)
     with st.sidebar:
-        st.divider()
-    st.markdown("### 🧹 数据库清洁工 (Cleaner)")
-    
-    if st.button("♻️ 执行去重 (Remove Duplicates)"):
-        import sqlite3
-        conn = sqlite3.connect(config.DB_FILE)
-        c = conn.cursor()
-        
-        # 1. 清理饮食记录 (Meals)
-        # 逻辑：如果 用户、日期、时间、食物名、卡路里 都一样，只保留 ID 最小的那条
-        c.execute("""
-            DELETE FROM meals 
-            WHERE id NOT IN (
-                SELECT MIN(id) 
-                FROM meals 
-                GROUP BY user_id, date, time, food_name, calories
-            )
-        """)
-        deleted_meals = c.rowcount
-        
-        # 2. 清理身体数据 (Body Stats)
-        # 逻辑：同一天如果有多条记录，只保留最早录入的那条
-        c.execute("""
-            DELETE FROM body_stats 
-            WHERE id NOT IN (
-                SELECT MIN(id) 
-                FROM body_stats 
-                GROUP BY user_id, date
-            )
-        """)
-        deleted_stats = c.rowcount
-        
-        conn.commit()
-        conn.close()
-        
-        st.success(f"🧹 清理完成！删除了 {deleted_meals} 条重复饮食记录，{deleted_stats} 条重复身体数据。")
-        time.sleep(2)
-        st.rerun()
-        
         st.header(f"👤 {current_username.upper()}")
         
-        # 🔴 修改后的 Logout 逻辑
+        # 🔴 登出逻辑：必须清空 URL 参数
         if st.button("🔒 LOGOUT"):
-            # 1. 清空 URL 参数（这一步最关键！撕掉免死金牌）
             st.query_params.clear()
-            
-            # 2. 清空登录状态
             st.session_state['logged_in'] = False
             st.session_state['user_info'] = None
-            
-            # 3. 强制刷新页面
             st.rerun()
             
         st.divider()
         st.header("⚙️ CONTROL PANEL")
         goal = st.selectbox("Current Mode", ["BULK", "CUT", "MAINTAIN"])
-        st.divider()
         
-        # ⚠️ 注意：这里传入了 current_user_id
+        # 显示体重
         body_df = database.get_body_history(current_user_id)
-        
         d_w = 70.0
         if not body_df.empty:
             d_w = float(body_df.iloc[-1]['weight'])
-            
         st.markdown(f"### Current Weight: `{d_w} KG`")
         if not body_df.empty:
             st.line_chart(body_df.set_index('date')['weight'], color="#FF5722", height=150)
             
-        # 安全备份按钮
+        # 🟢 数据维护区 (Admin Zone)
         st.divider()
-        st.markdown("### 🛡️ DATA SAFETY")
+        st.markdown("### 🛠️ ADMIN TOOLS")
+        
+        # 1. 数据库去重 (Cleaner)
+        if st.button("♻️ 去除重复数据"):
+            import sqlite3
+            conn = sqlite3.connect(config.DB_FILE)
+            c = conn.cursor()
+            # 清理饮食
+            c.execute("DELETE FROM meals WHERE id NOT IN (SELECT MIN(id) FROM meals GROUP BY user_id, date, time, food_name, calories)")
+            d_m = c.rowcount
+            # 清理身体数据
+            c.execute("DELETE FROM body_stats WHERE id NOT IN (SELECT MIN(id) FROM body_stats GROUP BY user_id, date)")
+            d_s = c.rowcount
+            conn.commit()
+            conn.close()
+            st.success(f"Cleaned: {d_m} meals, {d_s} stats.")
+            time.sleep(1)
+            st.rerun()
+
+        # 2. 数据库备份下载
         try:
             with open(config.DB_FILE, "rb") as f:
-                st.download_button(
-                    label="📥 BACKUP DATABASE",
-                    data=f,
-                    file_name=f"jarvis_backup_{config.get_current_time()[0]}.db",
-                    mime="application/octet-stream"
-                )
+                st.download_button("📥 备份数据库 (Backup)", data=f, file_name=f"jarvis_backup_{config.get_current_time()[0]}.db")
         except:
             pass
+            
+        # 3. 万能注入 (Restore)
+        st.markdown("---")
+        uploaded_file = st.file_uploader("导入旧数据库 (.db)", type=["db"])
+        if uploaded_file and st.button("🚀 注入给当前用户"):
+            import sqlite3
+            import hashlib
+            
+            # 保存临时文件
+            with open("temp.db", "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            
+            try:
+                # 连接目标库
+                conn_dest = sqlite3.connect(config.DB_FILE)
+                c_dest = conn_dest.cursor()
+                
+                # 连接源库
+                conn_src = sqlite3.connect("temp.db")
+                c_src = conn_src.cursor()
+                
+                # 检查源文件格式
+                cols = [d[0] for d in c_src.execute("SELECT * FROM meals LIMIT 1").description]
+                is_v3 = 'user_id' in cols
+                
+                # 搬运饮食
+                if is_v3:
+                    data = c_src.execute("SELECT date, time, food_name, calories, protein, carbs, fat, advice FROM meals").fetchall()
+                else:
+                    data = c_src.execute("SELECT date, time, food_name, calories, protein, carbs, fat, advice FROM meals").fetchall()
+                
+                for r in data:
+                    c_dest.execute("INSERT INTO meals (user_id, date, time, food_name, calories, protein, carbs, fat, advice) VALUES (?,?,?,?,?,?,?,?,?)",
+                                  (current_user_id, r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]))
+                                  
+                # 搬运身体数据
+                cols_b = [d[0] for d in c_src.execute("SELECT * FROM body_stats LIMIT 1").description]
+                if 'user_id' in cols_b:
+                    data_b = c_src.execute("SELECT date, weight, body_fat, muscle, water_rate, bmr, visceral_fat FROM body_stats").fetchall()
+                else:
+                    data_b = c_src.execute("SELECT date, weight, body_fat, muscle, water_rate, bmr, visceral_fat FROM body_stats").fetchall()
+                
+                for r in data_b:
+                    # 简单查重
+                    exists = c_dest.execute("SELECT id FROM body_stats WHERE user_id=? AND date=?", (current_user_id, r[0])).fetchone()
+                    if not exists:
+                        c_dest.execute("INSERT INTO body_stats (user_id, date, weight, body_fat, muscle, water_rate, bmr, visceral_fat) VALUES (?,?,?,?,?,?,?,?)",
+                                      (current_user_id, r[0], r[1], r[2], r[3], r[4], r[5], r[6]))
 
-    # --- Banner 图片逻辑 (本地加载) ---
-    def get_local_banner_images():
-        img_folder = "Fitness/Picture"
-        if not os.path.exists(img_folder):
-            os.makedirs(img_folder)
-            return [{"url": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1200", "text": "NO PAIN NO GAIN"}]
-        files = [f for f in os.listdir(img_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-        if not files:
-             return [{"url": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1200", "text": "ADD PHOTOS TO ASSETS"}]
-        hero_images = []
-        quotes = ["DISCIPLINE IS FREEDOM", "BUILD YOUR LEGACY", "UNLEASH THE BEAST", "SWEAT IS LUXURY"]
-        for f in files:
-            with open(os.path.join(img_folder, f), "rb") as image_file:
-                encoded_string = base64.b64encode(image_file.read()).decode()
-                hero_images.append({"url": f"data:image/jpeg;base64,{encoded_string}", "text": random.choice(quotes)})
-        return hero_images
+                conn_dest.commit()
+                conn_src.close()
+                conn_dest.close()
+                st.balloons()
+                st.success("导入成功！请点击上方'去除重复数据'清理。")
+            except Exception as e:
+                st.error(f"Error: {e}")
 
-    hero_pool = get_local_banner_images()
-    hero = random.choice(hero_pool)
-    
-    st.markdown(textwrap.dedent(f"""
+    # --- Banner ---
+    st.markdown("""
     <div style="position: relative; height: 260px; border-radius: 20px; overflow: hidden; margin-bottom: 30px; box-shadow: 0 15px 50px rgba(0,0,0,0.7);">
-        <img src="{hero['url']}" style="width: 100%; height: 100%; object-fit: cover; filter: brightness(0.6) contrast(1.1);">
-        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 60%);"></div>
-        <div style="position: absolute; bottom: 25px; left: 30px; color: #fff; font-family: 'Oswald', sans-serif; font-size: 42px; font-weight: 700; letter-spacing: 2px; text-shadow: 0 5px 15px rgba(0,0,0,0.8); text-transform: uppercase;">{hero['text']}</div>
+        <img src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1200" style="width: 100%; height: 100%; object-fit: cover; filter: brightness(0.6) contrast(1.1);">
+        <div style="position: absolute; bottom: 25px; left: 30px; color: #fff; font-family: 'Oswald', sans-serif; font-size: 42px; font-weight: 700; letter-spacing: 2px;">UNLEASH THE BEAST</div>
     </div>
-    """), unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
     # --- Main Tabs ---
     tab1, tab2, tab3 = st.tabs(["🔥 DIET SCAN", "📊 BODY STATS", "📑 DAILY REPORT"])
@@ -207,7 +209,6 @@ def main_app():
                     with st.spinner("JARVIS IS ANALYZING..."):
                         try:
                             data = ai_engine.analyze_food(img, desc)
-                            # ⚠️ 传入 current_user_id
                             database.save_meal(current_user_id, data)
                             st.toast("Data Logged", icon="✅")
                             time.sleep(0.5)
@@ -216,104 +217,6 @@ def main_app():
                             st.error(f"Error: {e}")
 
         st.divider()
-        st.divider()
-    st.markdown("### 🧬 万能数据注入 (Universal Restore)")
-    
-    # 允许上传任意 .db 文件
-    uploaded_file = st.file_uploader("拖入你的数据库文件 (v2pro.db 或 old.db)", type=["db"])
-    
-    if uploaded_file and st.button("🚀 强制注入给 John"):
-        import sqlite3
-        import hashlib
-        
-        # 1. 保存上传的文件到临时区
-        temp_path = "temp_restore.db"
-        with open(temp_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-            
-        st.caption("正在分析文件结构...")
-        
-        try:
-            # === A. 准备目标环境 (云端现有的库) ===
-            conn_dest = sqlite3.connect(config.DB_FILE)
-            c_dest = conn_dest.cursor()
-            
-            # 确保 John 存在
-            c_dest.execute("SELECT id FROM users WHERE username='John'")
-            john = c_dest.fetchone()
-            if not john:
-                # 如果没有 John，创建一个，密码 200487
-                pw_hash = hashlib.sha256(str.encode("200487")).hexdigest()
-                date_now = config.get_current_time()[0]
-                c_dest.execute("INSERT INTO users (username, password, created_at) VALUES (?, ?, ?)", 
-                              ("John", pw_hash, date_now))
-                target_user_id = c_dest.lastrowid
-                st.success(f"已自动创建账户 John (ID: {target_user_id})")
-            else:
-                target_user_id = john[0]
-                st.info(f"数据将注入到账户 John (ID: {target_user_id})")
-
-            # === B. 分析上传的文件 (来源库) ===
-            conn_src = sqlite3.connect(temp_path)
-            c_src = conn_src.cursor()
-            
-            # 🕵️‍♂️ 侦探逻辑：看看上传的文件里，meals 表到底长什么样？
-            # 获取 meals 表的所有列名
-            cursor = c_src.execute("SELECT * FROM meals LIMIT 1")
-            columns = [description[0] for description in cursor.description]
-            st.write(f"🔍 检测到上传文件的列: {columns}")
-            
-            # 判断是不是新版数据 (有没有 user_id)
-            is_v3_format = 'user_id' in columns
-            
-            # === C. 开始搬运饮食数据 (Meals) ===
-            if is_v3_format:
-                # 这种情况：你上传的是 v2pro.db (已经带 user_id 了)
-                st.info("识别为新版格式 (V3)，正在合并...")
-                # 我们只取数据列，忽略它原来的 user_id，强制改成当前的 John
-                data = c_src.execute("SELECT date, time, food_name, calories, protein, carbs, fat, advice FROM meals").fetchall()
-            else:
-                # 这种情况：你上传的是 old.db (旧版)
-                st.info("识别为旧版格式 (V2)，正在升级...")
-                data = c_src.execute("SELECT date, time, food_name, calories, protein, carbs, fat, advice FROM meals").fetchall()
-            
-            count_m = 0
-            for row in data:
-                # 写入云端库，强制 user_id = John
-                c_dest.execute("INSERT INTO meals (user_id, date, time, food_name, calories, protein, carbs, fat, advice) VALUES (?,?,?,?,?,?,?,?,?)",
-                              (target_user_id, row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]))
-                count_m += 1
-            
-            # === D. 开始搬运身体数据 (Body Stats) ===
-            # 同样的侦探逻辑检测 body_stats
-            cursor_b = c_src.execute("SELECT * FROM body_stats LIMIT 1")
-            cols_b = [desc[0] for desc in cursor_b.description]
-            
-            if 'user_id' in cols_b:
-                data_b = c_src.execute("SELECT date, weight, body_fat, muscle, water_rate, bmr, visceral_fat FROM body_stats").fetchall()
-            else:
-                data_b = c_src.execute("SELECT date, weight, body_fat, muscle, water_rate, bmr, visceral_fat FROM body_stats").fetchall()
-                
-            count_s = 0
-            for row in data_b:
-                # 查重，避免重复插入同一天的体重
-                exists = c_dest.execute("SELECT id FROM body_stats WHERE user_id=? AND date=?", (target_user_id, row[0])).fetchone()
-                if not exists:
-                    c_dest.execute("INSERT INTO body_stats (user_id, date, weight, body_fat, muscle, water_rate, bmr, visceral_fat) VALUES (?,?,?,?,?,?,?,?)",
-                                  (target_user_id, row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
-                    count_s += 1
-            
-            conn_dest.commit()
-            conn_src.close()
-            conn_dest.close()
-            
-            st.balloons()
-            st.success(f"🎉 成功！注入了 {count_m} 条饮食记录，{count_s} 条身体数据！")
-            st.markdown("### 👉 请立即刷新网页并查看！")
-            
-        except Exception as e:
-            st.error(f"❌ 注入失败 (详情): {e}")
-        # ⚠️ 传入 current_user_id
         meals = database.get_today_meals(current_user_id)
         if not meals.empty:
             t_cal = int(meals['calories'].sum())
@@ -341,19 +244,19 @@ def main_app():
     with tab2:
         with st.form("body_form"):
             c1, c2, c3 = st.columns(3)
-            d_w, d_f, d_m = 70.0, 20.0, 30.0
+            # 默认值
+            w_val, f_val, m_val = 70.0, 20.0, 30.0
             if not body_df.empty:
                 last = body_df.iloc[-1]
-                d_w = float(last['weight'])
-                d_f = float(last['body_fat'])
-                d_m = float(last['muscle'])
+                w_val = float(last['weight'])
+                f_val = float(last['body_fat'])
+                m_val = float(last['muscle'])
 
-            w = c1.number_input("Weight (KG)", value=d_w, step=0.1)
-            f = c2.number_input("Body Fat (%)", value=d_f, step=0.1)
-            m = c3.number_input("Muscle (KG)", value=d_m, step=0.1)
+            w = c1.number_input("Weight (KG)", value=w_val, step=0.1)
+            f = c2.number_input("Body Fat (%)", value=f_val, step=0.1)
+            m = c3.number_input("Muscle (KG)", value=m_val, step=0.1)
             
             if st.form_submit_button("💾 SAVE DATA", type="primary"):
-                # ⚠️ 传入 current_user_id
                 database.save_body_stats(current_user_id, w, f, m)
                 st.success("Updated Successfully!")
                 time.sleep(0.5)
@@ -370,12 +273,10 @@ def main_app():
             else:
                 with st.spinner("ANALYZING..."):
                     report = ai_engine.generate_report_text(meals, body_h, goal)
-                    # ⚠️ 传入 current_user_id
                     database.save_report(current_user_id, report)
                     st.rerun()
 
         st.divider()
-        # ⚠️ 传入 current_user_id
         reports = database.get_report_history(current_user_id)
         if not reports.empty:
             for _, row in reports.iterrows():
@@ -385,39 +286,30 @@ def main_app():
         else:
             st.info("No reports yet.")
 
-# === 🚀 程序入口逻辑 ===
-# 在 app.py 的最底部 (原来的 if st.session_state['logged_in']: ... 那里)
-# 替换为以下代码：
-
 # === 🚀 程序入口与自动登录逻辑 ===
+if __name__ == "__main__":
+    # 1. 如果没登录，先检查 URL 里有没有“免死金牌”
+    if not st.session_state['logged_in']:
+        params = st.query_params
+        # 检查是否有 user 和 token 参数
+        if "user" in params and "token" in params:
+            auto_user = params["user"]
+            
+            import sqlite3
+            try:
+                conn = sqlite3.connect(config.DB_FILE)
+                u_data = conn.execute("SELECT * FROM users WHERE username=?", (auto_user,)).fetchone()
+                conn.close()
+                
+                if u_data:
+                    st.session_state['logged_in'] = True
+                    st.session_state['user_info'] = u_data
+                    st.toast(f"⚡ AUTO-LOGIN: {auto_user}", icon="🔓")
+            except:
+                pass
 
-# 1. 如果没登录，先检查 URL 里有没有“免死金牌”
-if not st.session_state['logged_in']:
-    params = st.query_params
-    # 检查是否有 user 和 token 参数
-    if "user" in params and "token" in params:
-        auto_user = params["user"]
-        # 这里为了演示简单，直接信任 URL。
-        # (严格来说应该验证 token 的哈希值，但对于个人应用这样足够了)
-        
-        # 去数据库查一下这个用户，获取 ID
-        import sqlite3
-        conn = sqlite3.connect(config.DB_FILE)
-        # 注意：这里需要根据你的 users 表结构调整，假设 username 是唯一的
-        u_data = conn.execute("SELECT * FROM users WHERE username=?", (auto_user,)).fetchone()
-        conn.close()
-        
-        if u_data:
-            st.session_state['logged_in'] = True
-            st.session_state['user_info'] = u_data
-            st.toast(f"⚡ AUTO-LOGIN: {auto_user}", icon="🔓")
-
-# 2. 正常的路由逻辑
-if st.session_state['logged_in']:
-    main_app()
-else:
-    login_page()
-
-
-
-
+    # 2. 正常的路由逻辑
+    if st.session_state['logged_in']:
+        main_app()
+    else:
+        login_page()
