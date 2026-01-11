@@ -110,7 +110,7 @@ def main_app():
 
     # --- Banner 图片逻辑 (本地加载) ---
     def get_local_banner_images():
-        img_folder = "C:/Users/Defa/Desktop/Fitness/Picture"
+        img_folder = "Fitness/Picture"
         if not os.path.exists(img_folder):
             os.makedirs(img_folder)
             return [{"url": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1200", "text": "NO PAIN NO GAIN"}]
@@ -236,4 +236,5 @@ def main_app():
 if st.session_state['logged_in']:
     main_app()
 else:
+
     login_page()
